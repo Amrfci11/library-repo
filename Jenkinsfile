@@ -11,7 +11,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/your-username/your-repo.git' // Update with your repo
+                git branch: 'main', url: 'https://github.com/Amrfci11/library-repo.git' // Update with your repo
             }
         }
 
