@@ -5,7 +5,7 @@ pipeline {
         DOCKER_IMAGE = "amrsayed11/library-app"
         DOCKER_TAG = "${env.BUILD_NUMBER}"
         EKS_CLUSTER = "my-eks-cluster"  // Update with your cluster name
-        AWS_REGION = "us-east-1"        // Update your region
+        AWS_REGION = "eu-west-1"        // Update your region
         K8S_DIR = "k8s"                 // Path to your manifests
     }
 
