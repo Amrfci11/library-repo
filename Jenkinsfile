@@ -2,16 +2,16 @@ pipeline {
     agent any
 
     environment {
-        // Configure your Docker Hub credentials (store them in Jenkins Credentials Manager)
-        DOCKER_HUB_CREDS = credentials('docker-hub-creds') // Store these in Jenkins first!
-        DOCKER_IMAGE = "amrsayed11/my-app" // Replace with your image name
+        DOCKER_IMAGE = "amrsayed11/library-app"  // Change to your desired image name
         DOCKER_TAG = "latest"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Amrfci11/library-repo.git' // Update with your repo
+                git branch: 'main', 
+                url: 'https://github.com/Amrfci11/library-repo.git',
+                credentialsId: 'github-pip'  // Your existing GitHub credentials
             }
         }
 
