@@ -7,7 +7,7 @@ pipeline {
         EKS_CLUSTER = "my-eks-cluster"
         AWS_REGION = "eu-west-1"
         K8S_DIR = "k8s"
-        KUBECONFIG = "$WORKSPACE/kubeconfig"
+        KUBECONFIG = "${WORKSPACE}/kubeconfig"
     }
 
     stages {
@@ -37,7 +37,7 @@ pipeline {
             }
         }
 
-        stage('Configure AWS') {
+        stage('Configure AWS/EKS Access') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -46,25 +46,47 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
                     script {
-                        // Fixed: Escaped $ in shell commands
                         sh """
-                            aws eks update-kubeconfig \\
-                              --name ${EKS_CLUSTER} \\
-                              --region ${AWS_REGION} \\
-                              --kubeconfig ${KUBECONFIG} \\
+                            # Configure kubectl access
+                            aws eks update-kubeconfig \
+                              --name ${EKS_CLUSTER} \
+                              --region ${AWS_REGION} \
+                              --kubeconfig ${KUBECONFIG} \
                               --alias eks-${EKS_CLUSTER}
                             
                             export KUBECONFIG=${KUBECONFIG}
-                            kubectl config set-cluster eks-${EKS_CLUSTER} \\
-                              --server="\$(aws eks describe-cluster \\
-                                --name ${EKS_CLUSTER} \\
-                                --region ${AWS_REGION} \\
-                                --query 'cluster.endpoint' \\
-                                --output text)"
                             
-                            kubectl config set-context --current \\
-                              --cluster=eks-${EKS_CLUSTER} \\
-                              --namespace=library-app
+                            # Verify cluster access
+                            kubectl config current-context
+                            kubectl cluster-info
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Validate Network Connectivity') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    script {
+                        sh """
+                            # Get EKS API endpoint
+                            EKS_ENDPOINT=\$(aws eks describe-cluster \
+                              --name ${EKS_CLUSTER} \
+                              --region ${AWS_REGION} \
+                              --query 'cluster.endpoint' \
+                              --output text)
+                            
+                            # Test connectivity with timeout
+                            if ! curl --max-time 15 -k -v \$EKS_ENDPOINT/api; then
+                              echo "ERROR: Cannot reach EKS API endpoint"
+                              exit 1
+                            fi
                         """
                     }
                 }
@@ -80,16 +102,26 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
                     script {
-                        sh """
-                            export KUBECONFIG=${KUBECONFIG}
-                            kubectl apply -f ${K8S_DIR}/namespace.yaml --validate=false
-                            kubectl apply -f ${K8S_DIR}/deployment.yaml
-                            kubectl apply -f ${K8S_DIR}/service.yaml
-                            
-                            kubectl rollout status deployment/library-app \\
-                              -n library-app \\
-                              --timeout=300s
-                        """
+                        retry(3) {
+                            timeout(time: 5, unit: 'MINUTES') {
+                                sh """
+                                    export KUBECONFIG=${KUBECONFIG}
+                                    
+                                    # Apply Kubernetes manifests
+                                    kubectl apply -f ${K8S_DIR}/namespace.yaml --validate=false
+                                    kubectl apply -f ${K8S_DIR}/deployment.yaml
+                                    kubectl apply -f ${K8S_DIR}/service.yaml
+                                    
+                                    # Verify deployment
+                                    kubectl rollout status deployment/library-app \
+                                      -n library-app \
+                                      --timeout=300s
+                                    
+                                    # Get service details
+                                    kubectl get svc -n library-app
+                                """
+                            }
+                        }
                     }
                 }
             }
@@ -101,10 +133,16 @@ pipeline {
             sh "rm -f ${KUBECONFIG} || true"
         }
         success {
-            echo "Deployment successful!"
+            echo "Successfully deployed ${DOCKER_IMAGE}:${DOCKER_TAG} to EKS"
         }
         failure {
-            echo "Deployment failed"
+            echo "Deployment failed - check network connectivity and EKS cluster status"
+            sh """
+                aws eks describe-cluster \
+                  --name ${EKS_CLUSTER} \
+                  --region ${AWS_REGION} \
+                  --query 'cluster.{status:status,endpoint:endpoint}'
+            """
         }
     }
 }
