@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'mborham/jenkins-flask:latest' 
+        DOCKER_IMAGE = 'amrsayed11/jenkins-flask:latest' 
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials' 
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/MuhammadBorham/newfalsk.git'
+                git branch: 'main', url: 'https://github.com/Amrfci11/library-repo.git'
             }
         }
 
