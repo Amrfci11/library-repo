@@ -2,30 +2,32 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'amrsayed11/jenkins-flask:latest' 
-        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials' 
+        // Configure your Docker Hub credentials (store them in Jenkins Credentials Manager)
+        DOCKER_HUB_CREDS = credentials('docker-hub-creds') // Store these in Jenkins first!
+        DOCKER_IMAGE = "amrsayed11/my-app" // Replace with your image name
+        DOCKER_TAG = "latest"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Amrfci11/library-repo.git'
+                git branch: 'main', url: 'https://github.com/your-username/your-repo.git' // Update with your repo
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${env.DOCKER_IMAGE}")
+                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push to Docker Hub') {
             steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', "${env.DOCKER_HUB_CREDENTIALS}") {
-                        docker.image("${env.DOCKER_IMAGE}").push()
+                    docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-creds') {
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
                     }
                 }
             }
